@@ -80,9 +80,7 @@ impl Display for ParseError {
     }
 }
 
-pub fn parse(
-    path_to_repo: &str,
-) -> Result<(ProtocolDeployments, ProtocolDeployments), ParseError> {
+pub fn parse(path_to_repo: &str) -> Result<(ProtocolDeployments, ProtocolDeployments), ParseError> {
     let path_to_folder = format!("{}/addresses", path_to_repo);
 
     let supported_networks = read_supported_networks(&path_to_folder)?;
@@ -93,14 +91,10 @@ pub fn parse(
     for (network, info) in supported_networks.networks {
         let deployments = read_deployments_from_network_file(&path_to_folder, &network)?;
 
-        let active_v2_deployments = filter_active_deployments_by_version(
-            &deployments,
-            DeploymentVersion::V2,
-        );
-        let active_v3_deployments = filter_active_deployments_by_version(
-            &deployments,
-            DeploymentVersion::V3,
-        );
+        let active_v2_deployments =
+            filter_active_deployments_by_version(&deployments, DeploymentVersion::V2);
+        let active_v3_deployments =
+            filter_active_deployments_by_version(&deployments, DeploymentVersion::V3);
 
         if !active_v2_deployments.is_empty() {
             let v2_contracts =
