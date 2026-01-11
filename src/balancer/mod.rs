@@ -29,20 +29,20 @@ struct NetworkDeployments {
     deployments: HashMap<String, Deployment>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Deployment {
     version: DeploymentVersion,
     status: DeploymentStatus,
     contracts: Vec<Contract>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Contract {
     name: String,
     address: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 enum DeploymentStatus {
     #[serde(rename = "ACTIVE")]
     Active,
@@ -53,7 +53,7 @@ enum DeploymentStatus {
     Script,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
 enum DeploymentVersion {
     #[serde(rename = "v2")]
     V2,
@@ -80,46 +80,81 @@ impl Display for ParseError {
     }
 }
 
-pub fn parse(path_to_repo: &str) -> Result<ProtocolDeployments, ParseError> {
+pub fn parse(
+    path_to_repo: &str,
+) -> Result<(ProtocolDeployments, ProtocolDeployments), ParseError> {
     let path_to_folder = format!("{}/addresses", path_to_repo);
 
     let supported_networks = read_supported_networks(&path_to_folder)?;
 
-    let mut chains: ChainDeployments = HashMap::new();
+    let mut v2_chains: ChainDeployments = HashMap::new();
+    let mut v3_chains: ChainDeployments = HashMap::new();
 
     for (network, info) in supported_networks.networks {
         let deployments = read_deployments_from_network_file(&path_to_folder, &network)?;
-        let active_v2_deployments = filter_active_v2_deployments(deployments);
 
-        let contracts =
-            process_contracts_with_latest_deployments(active_v2_deployments, info.chain_id)?;
+        let active_v2_deployments = filter_active_deployments_by_version(
+            &deployments,
+            DeploymentVersion::V2,
+        );
+        let active_v3_deployments = filter_active_deployments_by_version(
+            &deployments,
+            DeploymentVersion::V3,
+        );
 
-        match chains.entry(info.chain_id) {
-            Entry::Occupied(_) => {
-                return Err(ParseError::ChainIdAlreadyExists {
-                    chain_id: info.chain_id,
-                });
+        if !active_v2_deployments.is_empty() {
+            let v2_contracts =
+                process_contracts_with_latest_deployments(active_v2_deployments, info.chain_id)?;
+
+            match v2_chains.entry(info.chain_id) {
+                Entry::Occupied(_) => {
+                    return Err(ParseError::ChainIdAlreadyExists {
+                        chain_id: info.chain_id,
+                    });
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(v2_contracts);
+                }
             }
-            Entry::Vacant(entry) => {
-                entry.insert(contracts);
+        }
+
+        if !active_v3_deployments.is_empty() {
+            let v3_contracts =
+                process_contracts_with_latest_deployments(active_v3_deployments, info.chain_id)?;
+
+            match v3_chains.entry(info.chain_id) {
+                Entry::Occupied(_) => {
+                    return Err(ParseError::ChainIdAlreadyExists {
+                        chain_id: info.chain_id,
+                    });
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(v3_contracts);
+                }
             }
         }
     }
 
-    Ok(ProtocolDeployments {
-        protocol_name: "balancer-v2".to_string(),
-        chains,
-    })
+    Ok((
+        ProtocolDeployments {
+            protocol_name: "balancer-v2".to_string(),
+            chains: v2_chains,
+        },
+        ProtocolDeployments {
+            protocol_name: "balancer-v3".to_string(),
+            chains: v3_chains,
+        },
+    ))
 }
 
 fn process_contracts_with_latest_deployments(
-    active_v2_deployments: HashMap<String, Deployment>,
+    active_deployments: HashMap<String, Deployment>,
     chain_id: u64,
 ) -> Result<ChainContracts, ParseError> {
     let mut contracts: ChainContracts = HashMap::new();
     let mut deployment_dates: HashMap<ContractName, NaiveDate> = HashMap::new();
 
-    for (signature, deployment) in active_v2_deployments {
+    for (signature, deployment) in active_deployments {
         let date = parse_data_from_signature(signature, chain_id)?;
 
         for contract in deployment.contracts {
@@ -137,14 +172,17 @@ fn process_contracts_with_latest_deployments(
     Ok(contracts)
 }
 
-fn filter_active_v2_deployments(deployments: NetworkDeployments) -> HashMap<String, Deployment> {
+fn filter_active_deployments_by_version(
+    deployments: &NetworkDeployments,
+    version: DeploymentVersion,
+) -> HashMap<String, Deployment> {
     deployments
         .deployments
-        .into_iter()
+        .iter()
         .filter(|(_, deployment)| {
-            deployment.version == DeploymentVersion::V2
-                && deployment.status == DeploymentStatus::Active
+            deployment.version == version && deployment.status == DeploymentStatus::Active
         })
+        .map(|(k, v)| (k.clone(), v.clone()))
         .collect::<HashMap<String, Deployment>>()
 }
 
@@ -189,16 +227,25 @@ mod tests {
     use chrono::Datelike;
 
     #[test]
-    fn test_parse_balancer_v2() {
+    fn test_parse_balancer() {
         let path = "source/balancer";
         let res = parse(path);
         assert!(res.is_ok());
 
-        let deployments = res.unwrap();
-        assert_eq!(deployments.protocol_name, "balancer-v2");
-        assert!(!deployments.chains.is_empty());
+        let (v2_deployments, v3_deployments) = res.unwrap();
 
-        for (chain_id, contracts) in deployments.chains {
+        assert_eq!(v2_deployments.protocol_name, "balancer-v2");
+        assert!(!v2_deployments.chains.is_empty());
+
+        for (chain_id, contracts) in v2_deployments.chains {
+            assert!(chain_id > 0);
+            assert!(!contracts.is_empty());
+        }
+
+        assert_eq!(v3_deployments.protocol_name, "balancer-v3");
+        assert!(!v3_deployments.chains.is_empty());
+
+        for (chain_id, contracts) in v3_deployments.chains {
             assert!(chain_id > 0);
             assert!(!contracts.is_empty());
         }
@@ -253,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_active_v2_deployments_all_active_v2() {
+    fn test_filter_active_deployments_all_active_v2() {
         let mut deployments_map = HashMap::new();
         deployments_map.insert(
             "20250101-deploy1".to_string(),
@@ -276,12 +323,13 @@ mod tests {
             deployments: deployments_map,
         };
 
-        let result = filter_active_v2_deployments(network_deployments);
+        let result =
+            filter_active_deployments_by_version(&network_deployments, DeploymentVersion::V2);
         assert_eq!(result.len(), 2);
     }
 
     #[test]
-    fn test_filter_active_v2_deployments_mixed() {
+    fn test_filter_active_deployments_mixed() {
         let mut deployments_map = HashMap::new();
         deployments_map.insert(
             "20250101-deploy1".to_string(),
@@ -312,18 +360,25 @@ mod tests {
             deployments: deployments_map,
         };
 
-        let result = filter_active_v2_deployments(network_deployments);
-        assert_eq!(result.len(), 1);
-        assert!(result.contains_key("20250101-deploy1"));
+        let v2_result =
+            filter_active_deployments_by_version(&network_deployments, DeploymentVersion::V2);
+        assert_eq!(v2_result.len(), 1);
+        assert!(v2_result.contains_key("20250101-deploy1"));
+
+        let v3_result =
+            filter_active_deployments_by_version(&network_deployments, DeploymentVersion::V3);
+        assert_eq!(v3_result.len(), 1);
+        assert!(v3_result.contains_key("20250103-deploy3"));
     }
 
     #[test]
-    fn test_filter_active_v2_deployments_empty() {
+    fn test_filter_active_deployments_empty() {
         let network_deployments = NetworkDeployments {
             deployments: HashMap::new(),
         };
 
-        let result = filter_active_v2_deployments(network_deployments);
+        let result =
+            filter_active_deployments_by_version(&network_deployments, DeploymentVersion::V2);
         assert_eq!(result.len(), 0);
     }
 
