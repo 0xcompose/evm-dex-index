@@ -1,5 +1,5 @@
 mod balancer_v2;
-mod parser;
+mod types;
 
 const BALANCER_REPO_PATH: &str = "source/balancer";
 
