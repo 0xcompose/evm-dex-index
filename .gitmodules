@@ -1,0 +1,3 @@
+[submodule "source/balancer"]
+	path = source/balancer
+	url = https://github.com/balancer/balancer-deployments
