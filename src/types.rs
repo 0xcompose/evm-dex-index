@@ -17,20 +17,3 @@ pub type ChainContracts = BTreeMap<ContractName, ContractAddress>;
 pub type ContractName = String;
 
 pub type ContractAddress = String;
-
-#[derive(Debug, Serialize)]
-pub struct ProtocolDeployment {
-    pub name: String,
-    pub chain_id: ChainId,
-    pub contracts: HashMap<String, String>,
-}
-
-impl ProtocolDeployment {
-    pub fn new(name: &str, chain_id: u64, contracts: HashMap<String, String>) -> Self {
-        Self {
-            name: name.to_string(),
-            chain_id,
-            contracts,
-        }
-    }
-}
