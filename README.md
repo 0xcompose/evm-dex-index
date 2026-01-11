@@ -51,4 +51,5 @@ I want to support only a subset of most popular protocols (because there's just 
 -   Balancer (V2, V3): get via [balancer-deployments](https://github.com/balancer/balancer-deployments)
 -   SushiSwap (?)
 -   PancakeSwap (V2, V3, Infinity): get v3 via [pancake-v3-contracts](https://github.com/pancakeswap/pancake-v3-contracts/tree/5cc479f0c5a98966c74d94700057b8c3ca629afd), v2 via
--   Aerodrome (CPMM, CLMM)
+-   Velodrome: get via [superchain-slipstream](https://github.com/velodrome-finance/superchain-slipstream/tree/main), optimism [slipstream](https://github.com/velodrome-finance/contracts),
+-   Aerodrome: get via [contracts](https://github.com/aerodrome-finance/contracts)
