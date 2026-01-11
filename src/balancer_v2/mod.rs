@@ -184,12 +184,293 @@ fn parse_data_from_signature(signature: String, chain_id: u64) -> Result<NaiveDa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Datelike;
 
     #[test]
     fn test_parse_balancer_v2() {
         let path = "source/balancer";
         let res = parse(path);
-        dbg!(&res);
         assert!(res.is_ok());
+
+        let deployments = res.unwrap();
+        assert!(!deployments.is_empty());
+    }
+
+    #[test]
+    fn test_parse_data_from_signature_valid() {
+        let signature = "20250411-balancer-registry-initializer-v2".to_string();
+        let result = parse_data_from_signature(signature, 1);
+
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2025);
+        assert_eq!(date.month(), 4);
+        assert_eq!(date.day(), 11);
+    }
+
+    #[test]
+    fn test_parse_data_from_signature_another_valid() {
+        let signature = "20231225-some-deployment".to_string();
+        let result = parse_data_from_signature(signature, 1);
+
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2023);
+        assert_eq!(date.month(), 12);
+        assert_eq!(date.day(), 25);
+    }
+
+    #[test]
+    fn test_parse_data_from_signature_invalid_no_date() {
+        let signature = "invalid-signature".to_string();
+        let result = parse_data_from_signature(signature.clone(), 1);
+
+        assert!(result.is_err());
+        match result {
+            Err(ParseError::DateParseError(_)) => {}
+            _ => panic!("Expected DateParseError"),
+        }
+    }
+
+    #[test]
+    fn test_parse_data_from_signature_empty() {
+        let signature = "".to_string();
+        let result = parse_data_from_signature(signature, 1);
+
+        assert!(result.is_err());
+        match result {
+            Err(ParseError::DateParseError(_)) => {}
+            _ => panic!("Expected DateParseError"),
+        }
+    }
+
+    #[test]
+    fn test_filter_active_v2_deployments_all_active_v2() {
+        let mut deployments_map = HashMap::new();
+        deployments_map.insert(
+            "20250101-deploy1".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![],
+            },
+        );
+        deployments_map.insert(
+            "20250102-deploy2".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![],
+            },
+        );
+
+        let chain_deployments = ChainDeployments {
+            deployments: deployments_map,
+        };
+
+        let result = filter_active_v2_deployments(chain_deployments);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_active_v2_deployments_mixed() {
+        let mut deployments_map = HashMap::new();
+        deployments_map.insert(
+            "20250101-deploy1".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![],
+            },
+        );
+        deployments_map.insert(
+            "20250102-deploy2".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Deprecated,
+                contracts: vec![],
+            },
+        );
+        deployments_map.insert(
+            "20250103-deploy3".to_string(),
+            Deployment {
+                version: DeploymentVersion::V3,
+                status: DeploymentStatus::Active,
+                contracts: vec![],
+            },
+        );
+
+        let chain_deployments = ChainDeployments {
+            deployments: deployments_map,
+        };
+
+        let result = filter_active_v2_deployments(chain_deployments);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("20250101-deploy1"));
+    }
+
+    #[test]
+    fn test_filter_active_v2_deployments_empty() {
+        let chain_deployments = ChainDeployments {
+            deployments: HashMap::new(),
+        };
+
+        let result = filter_active_v2_deployments(chain_deployments);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_process_contracts_single_deployment() {
+        let mut deployments = HashMap::new();
+        deployments.insert(
+            "20250101-deploy".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![
+                    Contract {
+                        name: "Vault".to_string(),
+                        address: "0x1234".to_string(),
+                    },
+                    Contract {
+                        name: "Router".to_string(),
+                        address: "0x5678".to_string(),
+                    },
+                ],
+            },
+        );
+
+        let result = process_contracts_with_latest_deployments(deployments, 1);
+        assert!(result.is_ok());
+
+        let contracts = result.unwrap();
+        assert_eq!(contracts.len(), 2);
+        assert_eq!(contracts.get("Vault"), Some(&"0x1234".to_string()));
+        assert_eq!(contracts.get("Router"), Some(&"0x5678".to_string()));
+    }
+
+    #[test]
+    fn test_process_contracts_keeps_latest_deployment() {
+        let mut deployments = HashMap::new();
+
+        deployments.insert(
+            "20240101-deploy1".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![Contract {
+                    name: "Vault".to_string(),
+                    address: "0xOLD".to_string(),
+                }],
+            },
+        );
+
+        deployments.insert(
+            "20250101-deploy2".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![Contract {
+                    name: "Vault".to_string(),
+                    address: "0xNEW".to_string(),
+                }],
+            },
+        );
+
+        let result = process_contracts_with_latest_deployments(deployments, 1);
+        assert!(result.is_ok());
+
+        let contracts = result.unwrap();
+        assert_eq!(contracts.len(), 1);
+        assert_eq!(contracts.get("Vault"), Some(&"0xNEW".to_string()));
+    }
+
+    #[test]
+    fn test_process_contracts_keeps_oldest_when_newer_comes_first() {
+        let mut deployments = HashMap::new();
+
+        deployments.insert(
+            "20250101-deploy1".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![Contract {
+                    name: "Vault".to_string(),
+                    address: "0xNEW".to_string(),
+                }],
+            },
+        );
+
+        deployments.insert(
+            "20240101-deploy2".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![Contract {
+                    name: "Vault".to_string(),
+                    address: "0xOLD".to_string(),
+                }],
+            },
+        );
+
+        let result = process_contracts_with_latest_deployments(deployments, 1);
+        assert!(result.is_ok());
+
+        let contracts = result.unwrap();
+        assert_eq!(contracts.len(), 1);
+        assert_eq!(contracts.get("Vault"), Some(&"0xNEW".to_string()));
+    }
+
+    #[test]
+    fn test_process_contracts_multiple_contracts_different_dates() {
+        let mut deployments = HashMap::new();
+
+        deployments.insert(
+            "20240101-deploy1".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![
+                    Contract {
+                        name: "Vault".to_string(),
+                        address: "0xVaultOld".to_string(),
+                    },
+                    Contract {
+                        name: "Router".to_string(),
+                        address: "0xRouterOld".to_string(),
+                    },
+                ],
+            },
+        );
+
+        deployments.insert(
+            "20250101-deploy2".to_string(),
+            Deployment {
+                version: DeploymentVersion::V2,
+                status: DeploymentStatus::Active,
+                contracts: vec![Contract {
+                    name: "Vault".to_string(),
+                    address: "0xVaultNew".to_string(),
+                }],
+            },
+        );
+
+        let result = process_contracts_with_latest_deployments(deployments, 1);
+        assert!(result.is_ok());
+
+        let contracts = result.unwrap();
+        assert_eq!(contracts.len(), 2);
+        assert_eq!(contracts.get("Vault"), Some(&"0xVaultNew".to_string()));
+        assert_eq!(contracts.get("Router"), Some(&"0xRouterOld".to_string()));
+    }
+
+    #[test]
+    fn test_process_contracts_empty_deployments() {
+        let deployments = HashMap::new();
+        let result = process_contracts_with_latest_deployments(deployments, 1);
+
+        assert!(result.is_ok());
+        let contracts = result.unwrap();
+        assert_eq!(contracts.len(), 0);
     }
 }
