@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::Serialize;
 
@@ -12,7 +12,7 @@ pub type ChainId = u64;
 
 pub type ChainDeployments = HashMap<ChainId, ChainContracts>;
 
-pub type ChainContracts = HashMap<ContractName, ContractAddress>;
+pub type ChainContracts = BTreeMap<ContractName, ContractAddress>;
 
 pub type ContractName = String;
 

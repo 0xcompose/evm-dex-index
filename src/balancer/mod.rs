@@ -151,7 +151,7 @@ fn process_contracts_with_latest_deployments(
     active_deployments: HashMap<String, Deployment>,
     chain_id: u64,
 ) -> Result<ChainContracts, ParseError> {
-    let mut contracts: ChainContracts = HashMap::new();
+    let mut contracts: ChainContracts = ChainContracts::new();
     let mut deployment_dates: HashMap<ContractName, NaiveDate> = HashMap::new();
 
     for (signature, deployment) in active_deployments {
