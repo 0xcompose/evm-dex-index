@@ -1,3 +1,9 @@
 [submodule "source/balancer"]
 	path = source/balancer
 	url = https://github.com/balancer/balancer-deployments
+[submodule "source/uniswap"]
+	path = source/uniswap
+	url = https://github.com/Uniswap/briefcase
+[submodule "source/pancakeswap/v3"]
+	path = source/pancakeswap/v3
+	url = https://github.com/pancakeswap/pancake-v3-contracts
