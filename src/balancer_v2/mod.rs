@@ -9,7 +9,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::parser::ProtocolDeployment;
+use crate::types::ProtocolDeployment;
 
 #[derive(Debug, Deserialize)]
 struct SupportedNetworks {
