@@ -13,7 +13,7 @@ use crate::types::{ChainContracts, ChainDeployments, ProtocolDeployments};
 #[derive(Debug, Deserialize)]
 struct ChainDeployment {
     #[serde(rename = "chainId")]
-    chain_id: String,
+    chain_id: u64,
     latest: HashMap<String, ContractDeployment>,
 }
 
@@ -24,8 +24,6 @@ struct ContractDeployment {
 
 #[derive(Debug, Error)]
 pub enum ParseError {
-    InvalidChainId { chain_id: String, file_name: String },
-
     IoError(#[from] std::io::Error),
 
     SerdeError(#[from] serde_json::Error),
@@ -50,24 +48,9 @@ pub fn parse(path_to_deployments: &str) -> Result<ProtocolDeployments, ParseErro
             continue;
         }
 
-        let file_name = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
         let file = File::open(&path)?;
         let reader = BufReader::new(file);
         let deployment: ChainDeployment = serde_json::from_reader(reader)?;
-
-        let chain_id: u64 =
-            deployment
-                .chain_id
-                .parse()
-                .map_err(|_| ParseError::InvalidChainId {
-                    chain_id: deployment.chain_id.clone(),
-                    file_name: file_name.clone(),
-                })?;
 
         let mut contracts: ChainContracts = ChainContracts::new();
 
@@ -75,7 +58,7 @@ pub fn parse(path_to_deployments: &str) -> Result<ProtocolDeployments, ParseErro
             contracts.insert(name, contract.address);
         }
 
-        chains.insert(chain_id, contracts);
+        chains.insert(deployment.chain_id, contracts);
     }
 
     Ok(ProtocolDeployments {
