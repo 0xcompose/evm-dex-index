@@ -1,0 +1,8 @@
+{
+  "PoolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+  "PositionDescriptor": "0x42e3ccd9b7f67b5b2ee0c12074b84ccf2a8e7f36",
+  "PositionManager": "0x1b35d13a2e2528f192637f14b05f0dc0e7deb566",
+  "StateView": "0x76fd297e2d437cd7f76d50f01afe6160f86e9990",
+  "UniversalRouter": "0x112908dac86e20e7241b0927479ea3bf935d1fa0",
+  "V4Quoter": "0x3972c00f7ed4885e145823eb7c655375d275a1c5"
+}
