@@ -9,7 +9,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::types::ProtocolDeployment;
+use crate::types::{ChainContracts, ChainDeployments, ContractName, ProtocolDeployments};
 
 #[derive(Debug, Deserialize)]
 struct SupportedNetworks {
@@ -24,7 +24,7 @@ struct NetworkInfo {
 }
 
 #[derive(Debug, Deserialize)]
-struct ChainDeployments {
+struct NetworkDeployments {
     #[serde(flatten)]
     deployments: HashMap<String, Deployment>,
 }
@@ -80,12 +80,12 @@ impl Display for ParseError {
     }
 }
 
-pub fn parse(path_to_repo: &str) -> Result<HashMap<u64, ProtocolDeployment>, ParseError> {
+pub fn parse(path_to_repo: &str) -> Result<ProtocolDeployments, ParseError> {
     let path_to_folder = format!("{}/addresses", path_to_repo);
 
     let supported_networks = read_supported_networks(&path_to_folder)?;
 
-    let mut protocol_deployments: HashMap<u64, ProtocolDeployment> = HashMap::new();
+    let mut chains: ChainDeployments = HashMap::new();
 
     for (network, info) in supported_networks.networks {
         let deployments = read_deployments_from_network_file(&path_to_folder, &network)?;
@@ -93,29 +93,31 @@ pub fn parse(path_to_repo: &str) -> Result<HashMap<u64, ProtocolDeployment>, Par
 
         let contracts =
             process_contracts_with_latest_deployments(active_v2_deployments, info.chain_id)?;
-        let protocol_deployment = ProtocolDeployment::new("balancer-v2", info.chain_id, contracts);
 
-        match protocol_deployments.entry(info.chain_id) {
+        match chains.entry(info.chain_id) {
             Entry::Occupied(_) => {
                 return Err(ParseError::ChainIdAlreadyExists {
                     chain_id: info.chain_id,
                 });
             }
             Entry::Vacant(entry) => {
-                entry.insert(protocol_deployment);
+                entry.insert(contracts);
             }
         }
     }
 
-    Ok(protocol_deployments)
+    Ok(ProtocolDeployments {
+        protocol_name: "balancer-v2".to_string(),
+        chains,
+    })
 }
 
 fn process_contracts_with_latest_deployments(
     active_v2_deployments: HashMap<String, Deployment>,
     chain_id: u64,
-) -> Result<HashMap<String, String>, ParseError> {
-    let mut contracts = HashMap::new();
-    let mut deployment_dates: HashMap<String, NaiveDate> = HashMap::new();
+) -> Result<ChainContracts, ParseError> {
+    let mut contracts: ChainContracts = HashMap::new();
+    let mut deployment_dates: HashMap<ContractName, NaiveDate> = HashMap::new();
 
     for (signature, deployment) in active_v2_deployments {
         let date = parse_data_from_signature(signature, chain_id)?;
@@ -135,7 +137,7 @@ fn process_contracts_with_latest_deployments(
     Ok(contracts)
 }
 
-fn filter_active_v2_deployments(deployments: ChainDeployments) -> HashMap<String, Deployment> {
+fn filter_active_v2_deployments(deployments: NetworkDeployments) -> HashMap<String, Deployment> {
     deployments
         .deployments
         .into_iter()
@@ -157,10 +159,10 @@ fn read_supported_networks(path_to_folder: &str) -> Result<SupportedNetworks, Pa
 fn read_deployments_from_network_file(
     path_to_folder: &str,
     network: &str,
-) -> Result<ChainDeployments, ParseError> {
+) -> Result<NetworkDeployments, ParseError> {
     let file = File::open(format!("{}/{}.json", path_to_folder, network))?;
     let reader = BufReader::new(file);
-    let deployments: ChainDeployments = serde_json::from_reader(reader)?;
+    let deployments: NetworkDeployments = serde_json::from_reader(reader)?;
 
     Ok(deployments)
 }
@@ -193,7 +195,13 @@ mod tests {
         assert!(res.is_ok());
 
         let deployments = res.unwrap();
-        assert!(!deployments.is_empty());
+        assert_eq!(deployments.protocol_name, "balancer-v2");
+        assert!(!deployments.chains.is_empty());
+
+        for (chain_id, contracts) in deployments.chains {
+            assert!(chain_id > 0);
+            assert!(!contracts.is_empty());
+        }
     }
 
     #[test]
@@ -264,11 +272,11 @@ mod tests {
             },
         );
 
-        let chain_deployments = ChainDeployments {
+        let network_deployments = NetworkDeployments {
             deployments: deployments_map,
         };
 
-        let result = filter_active_v2_deployments(chain_deployments);
+        let result = filter_active_v2_deployments(network_deployments);
         assert_eq!(result.len(), 2);
     }
 
@@ -300,22 +308,22 @@ mod tests {
             },
         );
 
-        let chain_deployments = ChainDeployments {
+        let network_deployments = NetworkDeployments {
             deployments: deployments_map,
         };
 
-        let result = filter_active_v2_deployments(chain_deployments);
+        let result = filter_active_v2_deployments(network_deployments);
         assert_eq!(result.len(), 1);
         assert!(result.contains_key("20250101-deploy1"));
     }
 
     #[test]
     fn test_filter_active_v2_deployments_empty() {
-        let chain_deployments = ChainDeployments {
+        let network_deployments = NetworkDeployments {
             deployments: HashMap::new(),
         };
 
-        let result = filter_active_v2_deployments(chain_deployments);
+        let result = filter_active_v2_deployments(network_deployments);
         assert_eq!(result.len(), 0);
     }
 
