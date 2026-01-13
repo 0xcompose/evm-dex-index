@@ -1,0 +1,9 @@
+{
+  "NFTDescriptor": "0x2e9d45bb7b30549f5216813ada9a6b7982c5b3ed",
+  "NonfungiblePositionManager": "0x3dcc735c74f10fe2b9db2bb55c40fbbbf24490f7",
+  "Quoter": "0x1ba215c17565de7b0cb7ecab971bcf540c24a862",
+  "QuoterV2": "0x1b4e313fef15630af3e6f2de550dbf4cc9d3081d",
+  "TickLens": "0x337478eb6058455ecb3696184b30dd6a29e3a893",
+  "UniswapV3Factory": "0x961235a9020b05c44df1026d956d1f4d78014276",
+  "V3Migrator": "0x0a78348b71f8ae8caff2f8f9d4d74a2f36516661"
+}

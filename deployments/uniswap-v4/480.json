@@ -1,0 +1,7 @@
+{
+  "PoolManager": "0xb1860d529182ac3bc1f51fa2abd56662b7d13f33",
+  "PositionDescriptor": "0x7da419153bd420b689f312363756d76836aeace4",
+  "PositionManager": "0xc585e0f504613b5fbf874f21af14c65260fb41fa",
+  "StateView": "0x51d394718bc09297262e368c1a481217fdeb71eb",
+  "V4Quoter": "0x55d235b3ff2daf7c3ede0defc9521f1d6fe6c5c0"
+}

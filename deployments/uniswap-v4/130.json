@@ -1,0 +1,8 @@
+{
+  "PoolManager": "0x1F98400000000000000000000000000000000004",
+  "PositionDescriptor": "0x9fb28449a191cd8c03a1b7abfb0f5996ecf7f722",
+  "PositionManager": "0x4529a01c7a0410167c5740c487a8de60232617bf",
+  "StateView": "0x86e8631a016f9068c3f085faf484ee3f5fdee8f2",
+  "V4Quoter": "0x333e3c607b141b18ff6de9f258db6e77fe7491e0",
+  "WETHHook": "0x730b109bad65152c67ecc94eb8b0968603dba888"
+}
