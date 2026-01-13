@@ -18,5 +18,7 @@ fn main() {
     let uniswap_deployments =
         uniswap::parse(UNISWAP_DEPLOYMENTS_PATH).expect("Failed to parse uniswap deployments");
 
-    write::write(TARGET_FOLDER, uniswap_deployments).expect("Failed to write uniswap deployments");
+    for deployment in uniswap_deployments {
+        write::write(TARGET_FOLDER, deployment).expect("Failed to write uniswap deployment");
+    }
 }
