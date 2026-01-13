@@ -3,6 +3,7 @@
   "NonfungiblePositionManager": "0x3dcc735c74f10fe2b9db2bb55c40fbbbf24490f7",
   "Quoter": "0x1ba215c17565de7b0cb7ecab971bcf540c24a862",
   "QuoterV2": "0x1b4e313fef15630af3e6f2de550dbf4cc9d3081d",
+  "SwapRouter02": "0x4c4eabd5fb1d1a7234a48692551eaecff8194ca7",
   "TickLens": "0x337478eb6058455ecb3696184b30dd6a29e3a893",
   "UniswapV3Factory": "0x961235a9020b05c44df1026d956d1f4d78014276",
   "V3Migrator": "0x0a78348b71f8ae8caff2f8f9d4d74a2f36516661"

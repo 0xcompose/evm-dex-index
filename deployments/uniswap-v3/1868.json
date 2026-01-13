@@ -1,9 +1,9 @@
 {
-  "MixedRouteQuoterV2": "0x42c14CE921e85bf14467A82fAf8182546cf7c604",
   "NFTDescriptor": "0x2e9d45bb7b30549f5216813ada9a6b7982c5b3ed",
   "NonfungiblePositionManager": "0x56c1205b0244332011c1e866f4ea5384eb6bfa2c",
   "Quoter": "0x78fc99f50fc8d83bd921d8b33dbaa0672687198a",
   "QuoterV2": "0x3e6c707d0125226ff60f291b6bd1404634f00aba",
+  "SwapRouter02": "0x7e40db01736f88464e5f4e42394f3d5bbb6705b9",
   "TickLens": "0xcd08eefb928c86499e6235ac155906bb7c4dc41a",
   "UniswapV3Factory": "0x42ae7ec7ff020412639d443e245d936429fbe717",
   "V3Migrator": "0xa107580f73bd797bd8b87ff24e98346d99f93ddb"
