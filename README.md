@@ -1,6 +1,13 @@
 # INDEX - in dex we trust
 
-Collection & indexer of core contract deployment addresses of popular DEX protocols across EVM chains
+Collection of core contract deployment addresses of popular DEX protocols & related projects across EVM chains
+
+Indexing:
+
+-   Uniswap (V2/V3/V4 + UniversalRouter + Permit2)
+-   Balancer (V2/V3)
+
+Directly from source (GitHub repos)
 
 ## Getting started
 
