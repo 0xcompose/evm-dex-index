@@ -11,7 +11,7 @@ use tracing::debug;
 use crate::types::{ChainContracts, ChainDeployments, ProtocolDeployments};
 
 #[derive(Debug, Deserialize)]
-struct ChainDeployment {
+struct UniswapDeployment {
     #[serde(rename = "chainId")]
     chain_id: String,
     latest: HashMap<String, ContractDeployment>,
@@ -21,6 +21,10 @@ struct ChainDeployment {
 struct ContractDeployment {
     address: String,
 }
+
+type ProtocolName = &'static str;
+
+type ProtocolsDeployments = HashMap<ProtocolName, ChainDeployments>;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
@@ -91,7 +95,16 @@ const PROTOCOL_CONFIGS: &[ProtocolConfig] = &[
     },
 ];
 
-fn validate_no_duplicate_contracts() -> Result<(), ParseError> {
+fn parse_chain_id(chain_id_str: &str) -> Result<u64, std::io::Error> {
+    chain_id_str.parse().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Invalid chain_id: {}", chain_id_str),
+        )
+    })
+}
+
+fn validate_protocol_configs_for_duplicate_definitions() -> Result<(), ParseError> {
     let mut contract_to_protocols: HashMap<&str, Vec<&str>> = HashMap::new();
 
     for config in PROTOCOL_CONFIGS {
@@ -115,59 +128,109 @@ fn validate_no_duplicate_contracts() -> Result<(), ParseError> {
     Ok(())
 }
 
-pub fn parse(path_to_deployments: &str) -> Result<Vec<ProtocolDeployments>, ParseError> {
-    validate_no_duplicate_contracts()?;
-
-    let mut protocol_chains: HashMap<&str, ChainDeployments> = HashMap::new();
-    let mut found_contracts: HashMap<&str, HashSet<&str>> = HashMap::new();
-
+fn build_response(
+    protocol_chains: HashMap<&str, ChainDeployments>,
+) -> Result<Vec<ProtocolDeployments>, ParseError> {
+    let mut result = Vec::new();
     for config in PROTOCOL_CONFIGS {
-        protocol_chains.insert(config.protocol_name, HashMap::new());
-        found_contracts.insert(config.protocol_name, HashSet::new());
+        let chains = protocol_chains.get(config.protocol_name).unwrap();
+        if !chains.is_empty() {
+            result.push(ProtocolDeployments {
+                protocol_name: config.protocol_name.to_string(),
+                chains: chains.clone(),
+            });
+        }
     }
 
-    let entries = std::fs::read_dir(path_to_deployments)?;
+    Ok(result)
+}
 
+fn try_to_find_missing_contracts(protocol_chains: &ProtocolsDeployments) -> Result<(), ParseError> {
+    for config in PROTOCOL_CONFIGS {
+        let chains: &HashMap<u64, ChainContracts> = protocol_chains
+            .get(config.protocol_name)
+            .expect("Protocol not found");
+
+        let mut found_contracts: HashSet<&str> = HashSet::new();
+
+        for (_chain_id, contracts) in chains {
+            for contract_name in contracts.keys() {
+                found_contracts.insert(contract_name.as_str());
+            }
+        }
+
+        let missing: Vec<String> = config
+            .contracts
+            .iter()
+            .filter(|&&contract| !found_contracts.contains(contract))
+            .map(|s| s.to_string())
+            .collect();
+
+        if !missing.is_empty() {
+            return Err(ParseError::MissingContracts {
+                protocol_name: config.protocol_name.to_string(),
+                contracts: missing,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn read_deployments(path_to_deployments: &str) -> Result<Vec<UniswapDeployment>, std::io::Error> {
+    let entries = std::fs::read_dir(path_to_deployments)?;
+    let mut deployments = Vec::new();
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
+        let deployment: UniswapDeployment =
+            serde_json::from_reader(BufReader::new(File::open(&path)?))?;
+        deployments.push(deployment);
+    }
+    Ok(deployments)
+}
 
-        if path.extension().and_then(|s| s.to_str()) != Some("json") {
-            continue;
-        }
+fn init_protocol_chains() -> ProtocolsDeployments {
+    let mut protocol_chains: ProtocolsDeployments = HashMap::new();
 
-        let file = File::open(&path)?;
-        let reader = BufReader::new(file);
-        let deployment: ChainDeployment = serde_json::from_reader(reader)?;
+    for config in PROTOCOL_CONFIGS {
+        protocol_chains.insert(config.protocol_name, HashMap::new());
+    }
 
-        let chain_id: u64 = deployment.chain_id.parse().map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Invalid chain_id: {}", deployment.chain_id),
-            )
-        })?;
+    protocol_chains
+}
 
-        let mut chain_protocol_contracts: HashMap<&str, ChainContracts> = HashMap::new();
+pub fn parse(path_to_deployments: &str) -> Result<Vec<ProtocolDeployments>, ParseError> {
+    validate_protocol_configs_for_duplicate_definitions()?;
+
+    let mut protocol_chains: ProtocolsDeployments = init_protocol_chains();
+
+    let deployments = read_deployments(path_to_deployments)?;
+
+    for chain_deployments in deployments {
+        let chain_id: u64 = parse_chain_id(&chain_deployments.chain_id)?;
+
+        let mut chain_protocol_contracts: HashMap<ProtocolName, ChainContracts> = HashMap::new();
+
         for config in PROTOCOL_CONFIGS {
             chain_protocol_contracts.insert(config.protocol_name, ChainContracts::new());
         }
 
-        for (name, contract) in deployment.latest {
+        for (name, contract) in chain_deployments.latest {
             let mut matched = false;
+
             for config in PROTOCOL_CONFIGS {
-                if let Some(&contract_name) = config.contracts.iter().find(|&&c| c == name.as_str())
-                {
-                    chain_protocol_contracts
-                        .get_mut(config.protocol_name)
-                        .unwrap()
-                        .insert(name.clone(), contract.address.clone());
-                    found_contracts
-                        .get_mut(config.protocol_name)
-                        .unwrap()
-                        .insert(contract_name);
-                    matched = true;
-                    break;
+                if !config.contracts.iter().any(|&c| c == name.as_str()) {
+                    continue;
                 }
+
+                chain_protocol_contracts
+                    .get_mut(config.protocol_name)
+                    .expect("Not found protocol")
+                    .insert(name.clone(), contract.address.clone());
+
+                matched = true;
+                break;
             }
 
             if !matched {
@@ -185,38 +248,14 @@ pub fn parse(path_to_deployments: &str) -> Result<Vec<ProtocolDeployments>, Pars
                 protocol_chains
                     .get_mut(config.protocol_name)
                     .unwrap()
-                    .insert(chain_id, contracts.clone());
+                    .insert(chain_id, contracts.to_owned());
             }
         }
     }
 
-    for config in PROTOCOL_CONFIGS {
-        let found = found_contracts.get(config.protocol_name).unwrap();
-        let missing: Vec<String> = config
-            .contracts
-            .iter()
-            .filter(|contract| !found.contains(*contract))
-            .map(|s| s.to_string())
-            .collect();
+    try_to_find_missing_contracts(&protocol_chains)?;
 
-        if !missing.is_empty() {
-            return Err(ParseError::MissingContracts {
-                protocol_name: config.protocol_name.to_string(),
-                contracts: missing,
-            });
-        }
-    }
-
-    let mut result = Vec::new();
-    for config in PROTOCOL_CONFIGS {
-        let chains = protocol_chains.get(config.protocol_name).unwrap();
-        if !chains.is_empty() {
-            result.push(ProtocolDeployments {
-                protocol_name: config.protocol_name.to_string(),
-                chains: chains.clone(),
-            });
-        }
-    }
+    let result = build_response(protocol_chains)?;
 
     Ok(result)
 }
