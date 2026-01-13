@@ -1,12 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt::{self, Display},
     fs::File,
     io::BufReader,
 };
 
 use serde::Deserialize;
 use thiserror::Error;
+use tracing::debug;
 
 use crate::types::{ChainContracts, ChainDeployments, ProtocolDeployments};
 
@@ -153,6 +153,7 @@ pub fn parse(path_to_deployments: &str) -> Result<Vec<ProtocolDeployments>, Pars
         }
 
         for (name, contract) in deployment.latest {
+            let mut matched = false;
             for config in PROTOCOL_CONFIGS {
                 if let Some(&contract_name) = config.contracts.iter().find(|&&c| c == name.as_str())
                 {
@@ -164,8 +165,17 @@ pub fn parse(path_to_deployments: &str) -> Result<Vec<ProtocolDeployments>, Pars
                         .get_mut(config.protocol_name)
                         .unwrap()
                         .insert(contract_name);
+                    matched = true;
                     break;
                 }
+            }
+
+            if !matched {
+                debug!(
+                    contract = %name,
+                    chain_id = %chain_id,
+                    "Contract not assigned to any protocol"
+                );
             }
         }
 
@@ -230,6 +240,7 @@ mod tests {
                     || protocol.protocol_name == "uniswap-v3"
                     || protocol.protocol_name == "uniswap-v4"
                     || protocol.protocol_name == "universal-router"
+                    || protocol.protocol_name == "permit2"
             );
             assert!(!protocol.chains.is_empty());
 

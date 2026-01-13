@@ -9,6 +9,8 @@ const BALANCER_REPO_PATH: &str = "source/balancer";
 const UNISWAP_DEPLOYMENTS_PATH: &str = "source/uniswap/deployments";
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     let (v2_deployments, v3_deployments) =
         balancer::parse(BALANCER_REPO_PATH).expect("Failed to parse balancer deployments");
 
